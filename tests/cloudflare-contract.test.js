@@ -97,6 +97,18 @@ test('local and Registry examples have separate, explicit source contracts', asy
   assert.match(registryReadme, /has not approved or published/u)
 })
 
+test('local Cloudflare handoff targets the owner-reported apex and does not claim live verification', async () => {
+  const tfvars = await read('examples/local-consumer/terraform.tfvars.example')
+  const readme = await read('examples/local-consumer/README.md')
+  assert.match(tfvars, /public_hostname\s*=\s*"artifact-pages\.dev"/u)
+  assert.match(tfvars, /preview_retention_days\s*=\s*1/u)
+  assert.match(readme, /owner-reported `artifact-pages\.dev` apex/u)
+  assert.match(readme, /does not verify authoritative DNS/u)
+  assert.match(readme, /seconds-based age condition.*separate disposable bucket/su)
+  assert.match(readme, /does not change or claim exact timing/u)
+  assert.match(readme, /must never be applied/u)
+})
+
 test('migration guide states state moves, bucket import, ruleset ownership, and destruction limits', async () => {
   const readme = await read('README.md')
   assert.match(readme, /terraform state mv/u)

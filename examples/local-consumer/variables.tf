@@ -14,7 +14,7 @@ variable "r2_bucket_name" {
 }
 
 variable "public_hostname" {
-  description = "Sample hostname in the selected Cloudflare zone. Replace it before a real deployment."
+  description = "Example apex hostname from the owner-reported domain purchase. Confirm the Cloudflare zone and authoritative DNS before a real plan."
   type        = string
 }
 
