@@ -64,12 +64,6 @@ variable "existing_transform_rules" {
   default     = []
 }
 
-variable "existing_firewall_rules" {
-  description = "Complete existing http_request_firewall_custom root ruleset rules, in execution order, to preserve when this module owns that phase."
-  type        = list(any)
-  default     = []
-}
-
 variable "existing_cache_rules" {
   description = "Complete existing http_request_cache_settings root ruleset rules, in execution order, to preserve when this module owns that phase."
   type        = list(any)
@@ -86,12 +80,6 @@ variable "transform_ruleset_name" {
   description = "Name of the http_request_transform phase-root ruleset. When importing an existing root, set its current name to avoid replacement."
   type        = string
   default     = "Artifact Pages logical routes"
-}
-
-variable "firewall_ruleset_name" {
-  description = "Name of the http_request_firewall_custom phase-root ruleset. When importing an existing root, set its current name to avoid replacement."
-  type        = string
-  default     = "Artifact Pages private control boundary"
 }
 
 variable "cache_ruleset_name" {

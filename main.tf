@@ -13,11 +13,9 @@ module "delivery" {
   minimum_tls_version            = var.minimum_tls_version
   connect_custom_domain          = var.connect_custom_domain
   existing_transform_rules       = var.existing_transform_rules
-  existing_firewall_rules        = var.existing_firewall_rules
   existing_cache_rules           = var.existing_cache_rules
   existing_response_header_rules = var.existing_response_header_rules
   transform_ruleset_name         = var.transform_ruleset_name
-  firewall_ruleset_name          = var.firewall_ruleset_name
   cache_ruleset_name             = var.cache_ruleset_name
   response_header_ruleset_name   = var.response_header_ruleset_name
 }

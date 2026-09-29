@@ -13,8 +13,6 @@ locals {
     "not starts_with(${local.normalized_path}, \"/_artifacts/\")",
     "${local.normalized_path} ne \"/_previews\"",
     "not starts_with(${local.normalized_path}, \"/_previews/\")",
-    "${local.normalized_path} ne \"/_control\"",
-    "not starts_with(${local.normalized_path}, \"/_control/\")",
   ])
 
   logical_route_rule = {
@@ -44,14 +42,6 @@ locals {
     "${local.normalized_path} eq \"/_previews\"",
     "starts_with(${local.normalized_path}, \"/_previews/\")",
   ])
-
-  control_block_rule = {
-    ref         = "artifact-pages-block-control-objects"
-    description = "Keep private publisher coordination objects off the public hostname."
-    expression  = "(${local.host_match} and (${local.normalized_path} eq \"/_control\" or starts_with(${local.normalized_path}, \"/_control/\")))"
-    action      = "block"
-    enabled     = true
-  }
 
   origin_cache_rule = {
     ref         = "artifact-pages-respect-origin-cache-control"
@@ -126,12 +116,6 @@ resource "cloudflare_r2_custom_domain" "public" {
   min_tls     = var.minimum_tls_version
 }
 
-resource "cloudflare_r2_managed_domain" "development" {
-  account_id  = var.account_id
-  bucket_name = var.bucket_name
-  enabled     = false
-}
-
 resource "cloudflare_ruleset" "logical_routes" {
   zone_id     = var.zone_id
   name        = var.transform_ruleset_name
@@ -140,16 +124,6 @@ resource "cloudflare_ruleset" "logical_routes" {
   phase       = "http_request_transform"
 
   rules = concat(var.existing_transform_rules, [local.logical_route_rule])
-}
-
-resource "cloudflare_ruleset" "control_boundary" {
-  zone_id     = var.zone_id
-  name        = var.firewall_ruleset_name
-  description = "Block publisher coordination objects before delivery."
-  kind        = "zone"
-  phase       = "http_request_firewall_custom"
-
-  rules = concat([local.control_block_rule], var.existing_firewall_rules)
 }
 
 resource "cloudflare_ruleset" "origin_cache_policy" {
