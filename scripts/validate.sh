@@ -8,42 +8,35 @@ if [[ "$terraform_version" != "1.9.8" ]]; then
   exit 1
 fi
 
+module_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+apprepo_dir="${ARTIFACT_PAGES_APPREPO_DIR:-$module_root/../git-artifact-pages}"
+apprepo_dir="$(cd "$apprepo_dir" && pwd)"
+if [[ ! -f "$apprepo_dir/go.mod" ]]; then
+  printf 'Artifact Pages OSS checkout not found; set ARTIFACT_PAGES_APPREPO_DIR.\n' >&2
+  exit 1
+fi
+
 export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-/tmp/terraform-provider-cache}"
-mkdir -p "$TF_PLUGIN_CACHE_DIR"
-export CLOUDFLARE_API_TOKEN="local-contract-plan-placeholder"
+mkdir -p "$TF_PLUGIN_CACHE_DIR" "$apprepo_dir/.local"
+contract_helper_dir="$(mktemp -d "$apprepo_dir/.local/terraform-cloudflare-contract.XXXXXX")"
+cp "$module_root/tests/cli-contract/validator.go" "$contract_helper_dir/main.go"
+export TF_VAR_apprepo_dir="$apprepo_dir"
+export TF_VAR_cli_contract_helper="$contract_helper_dir/main.go"
+
+temporary_root="$(mktemp -d /tmp/cloudflare-module-validation.XXXXXX)"
+trap 'rm -r "$temporary_root" "$contract_helper_dir"' EXIT
 
 "$terraform_bin" fmt -check -recursive
 "$terraform_bin" init -backend=false -input=false -lockfile=readonly
 "$terraform_bin" validate
 "$terraform_bin" -chdir=examples/local-consumer init -backend=false -input=false -lockfile=readonly
 "$terraform_bin" -chdir=examples/local-consumer validate
-"$terraform_bin" -chdir=examples/local-consumer plan -refresh=false -input=false -lock=false -var-file=terraform.tfvars.example
-
-check_invalid_plan() {
-  local input="$1"
-  local expected="$2"
-  local output
-  local status
-  set +e
-  output=$("$terraform_bin" -chdir=examples/local-consumer plan -refresh=false -input=false -lock=false -var-file=terraform.tfvars.example -var "$input" 2>&1)
-  status=$?
-  set -e
-  if [[ "$status" -eq 0 ]] || ! printf '%s' "$output" | rg -q "$expected"; then
-    printf '%s\n' "$output" >&2
-    printf 'Expected plan rejection containing: %s\n' "$expected" >&2
-    exit 1
-  fi
-}
-
-check_invalid_plan 'preview_retention_days=0' 'preview_retention_days must be a whole number'
-check_invalid_plan 'preview_retention_days=1.5' 'preview_retention_days must be a whole number'
-check_invalid_plan 'cloudflare_account_id="bad"' 'account_id must be a 32-character hexadecimal'
-check_invalid_plan 'public_hostname="https://artifacts.example.com"' 'public_hostname must be a DNS hostname'
+"$terraform_bin" -chdir=tests/cli-contract init -backend=false -input=false -lockfile=readonly
+"$terraform_bin" -chdir=tests/cli-contract test -no-color
 
 node --test tests/*.test.js
 
-migration_root="$(mktemp -d /tmp/cloudflare-module-migration.XXXXXX)"
-trap 'rm -rf "$migration_root"' EXIT
+migration_root="$temporary_root/migration"
 mkdir -p "$migration_root/work/modules"
 cp -R tests/fixtures/module-migration/modules/. "$migration_root/work/modules/"
 cp tests/fixtures/module-migration/old.tf "$migration_root/work/main.tf"

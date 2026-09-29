@@ -9,8 +9,9 @@ variable "cloudflare_zone_id" {
 }
 
 variable "r2_bucket_name" {
-  description = "Globally unique name for the new private R2 bucket."
+  description = "Optional bucket name override. Omit to use the module's account-scoped default."
   type        = string
+  default     = null
 }
 
 variable "public_hostname" {
@@ -19,6 +20,6 @@ variable "public_hostname" {
 }
 
 variable "preview_retention_days" {
-  description = "Provider-managed preview lifetime; match the CLI deployment config."
+  description = "Provider-managed preview lifetime in whole days."
   type        = number
 }

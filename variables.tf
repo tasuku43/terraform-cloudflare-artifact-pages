@@ -19,8 +19,10 @@ variable "zone_id" {
 }
 
 variable "bucket_name" {
-  description = "Globally unique name of the new private R2 bucket."
+  description = "Name of the new private R2 bucket. Defaults to artifact-pages, which is account-scoped; availability is not guaranteed."
   type        = string
+  default     = "artifact-pages"
+  nullable    = false
 
   validation {
     condition     = trimspace(var.bucket_name) != ""
@@ -42,12 +44,45 @@ variable "public_hostname" {
 }
 
 variable "preview_retention_days" {
-  description = "Whole-number lifetime for objects under _previews/; set this equal to previewRetentionDays in the CLI deployment configuration."
+  description = "Whole-number provider-managed lifetime for objects under _previews/. This setting is not part of the CLI deployment configuration."
   type        = number
 
   validation {
     condition     = var.preview_retention_days >= 1 && var.preview_retention_days <= 36500 && floor(var.preview_retention_days) == var.preview_retention_days
     error_message = "preview_retention_days must be a whole number from 1 to 36500."
+  }
+}
+
+variable "access_key_id_env" {
+  description = "Environment-variable name for the primary R2 access key ID in generated CLI configuration."
+  type        = string
+  default     = "CF_R2_ACCESS_KEY_ID"
+
+  validation {
+    condition     = can(regex("^[A-Za-z_][A-Za-z0-9_]*$", var.access_key_id_env))
+    error_message = "access_key_id_env must be a valid environment-variable name."
+  }
+}
+
+variable "secret_access_key_env" {
+  description = "Environment-variable name for the primary R2 secret access key in generated CLI configuration."
+  type        = string
+  default     = "CF_R2_SECRET_ACCESS_KEY"
+
+  validation {
+    condition     = can(regex("^[A-Za-z_][A-Za-z0-9_]*$", var.secret_access_key_env))
+    error_message = "secret_access_key_env must be a valid environment-variable name."
+  }
+}
+
+variable "api_token_env" {
+  description = "Environment-variable name for the Cloudflare API token in generated CLI configuration."
+  type        = string
+  default     = "CF_API_TOKEN"
+
+  validation {
+    condition     = can(regex("^[A-Za-z_][A-Za-z0-9_]*$", var.api_token_env))
+    error_message = "api_token_env must be a valid environment-variable name."
   }
 }
 
@@ -80,12 +115,6 @@ variable "existing_transform_rules" {
   default     = []
 }
 
-variable "existing_firewall_rules" {
-  description = "Complete existing http_request_firewall_custom root ruleset rules, in execution order, to preserve when this module owns that phase."
-  type        = list(any)
-  default     = []
-}
-
 variable "existing_cache_rules" {
   description = "Complete existing http_request_cache_settings root ruleset rules, in execution order, to preserve when this module owns that phase."
   type        = list(any)
@@ -102,12 +131,6 @@ variable "transform_ruleset_name" {
   description = "Name for the http_request_transform phase root. For an imported ruleset, use its current name."
   type        = string
   default     = "Artifact Pages logical routes"
-}
-
-variable "firewall_ruleset_name" {
-  description = "Name for the http_request_firewall_custom phase root. For an imported ruleset, use its current name."
-  type        = string
-  default     = "Artifact Pages private control boundary"
 }
 
 variable "cache_ruleset_name" {

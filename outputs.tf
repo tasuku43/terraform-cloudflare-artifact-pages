@@ -9,23 +9,20 @@ output "public_base_url" {
 }
 
 output "artifact_pages_deployment_config_yaml" {
-  description = "Non-secret Artifact Pages deployment configuration. It contains environment-variable names, never credential values."
+  description = "Non-secret Artifact Pages deployment configuration. It omits default credential environment-variable names and includes only non-default names, never credential values."
   value = yamlencode({
-    schemaVersion        = 1
-    provider             = "cloudflare"
-    previewRetentionDays = var.preview_retention_days
-    cloudflare = {
-      accountId                        = var.account_id
-      bucket                           = cloudflare_r2_bucket.origin.name
-      zoneId                           = var.zone_id
-      publicBaseURL                    = module.delivery.public_base_url
-      accessKeyIdEnv                   = "CF_R2_ACCESS_KEY_ID"
-      secretAccessKeyEnv               = "CF_R2_SECRET_ACCESS_KEY"
-      sessionTokenEnv                  = "CF_R2_SESSION_TOKEN"
-      registryReaderAccessKeyIdEnv     = "CF_R2_REGISTRY_READER_ACCESS_KEY_ID"
-      registryReaderSecretAccessKeyEnv = "CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY"
-      registryReaderSessionTokenEnv    = "CF_R2_REGISTRY_READER_SESSION_TOKEN"
-      apiTokenEnv                      = "CF_API_TOKEN"
-    }
+    schemaVersion = 1
+    provider      = "cloudflare"
+    cloudflare = merge(
+      {
+        accountId     = var.account_id
+        bucket        = cloudflare_r2_bucket.origin.name
+        zoneId        = var.zone_id
+        publicBaseURL = module.delivery.public_base_url
+      },
+      var.access_key_id_env == "CF_R2_ACCESS_KEY_ID" ? {} : { accessKeyIdEnv = var.access_key_id_env },
+      var.secret_access_key_env == "CF_R2_SECRET_ACCESS_KEY" ? {} : { secretAccessKeyEnv = var.secret_access_key_env },
+      var.api_token_env == "CF_API_TOKEN" ? {} : { apiTokenEnv = var.api_token_env },
+    )
   })
 }
