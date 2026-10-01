@@ -11,14 +11,15 @@ fi
 module_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 apprepo_dir="${ARTIFACT_PAGES_APPREPO_DIR:-$module_root/../git-artifact-pages}"
 apprepo_dir="$(cd "$apprepo_dir" && pwd)"
-if [[ ! -f "$apprepo_dir/go.mod" ]]; then
+if [[ ! -f "$apprepo_dir/go.mod" || ! -f "$apprepo_dir/cli/internal/config/config.go" ]]; then
   printf 'Artifact Pages OSS checkout not found; set ARTIFACT_PAGES_APPREPO_DIR.\n' >&2
   exit 1
 fi
 
 export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-/tmp/terraform-provider-cache}"
-mkdir -p "$TF_PLUGIN_CACHE_DIR" "$apprepo_dir/.local"
-contract_helper_dir="$(mktemp -d "$apprepo_dir/.local/terraform-cloudflare-contract.XXXXXX")"
+mkdir -p "$TF_PLUGIN_CACHE_DIR" "$apprepo_dir/cli/.local"
+# Go internal packages may only be imported from within the CLI subtree.
+contract_helper_dir="$(mktemp -d "$apprepo_dir/cli/.local/terraform-cloudflare-contract.XXXXXX")"
 cp "$module_root/tests/cli-contract/validator.go" "$contract_helper_dir/main.go"
 export TF_VAR_apprepo_dir="$apprepo_dir"
 export TF_VAR_cli_contract_helper="$contract_helper_dir/main.go"

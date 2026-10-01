@@ -6,7 +6,7 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/tasuku43/git-artifact-pages/internal/config"
+	"github.com/tasuku43/git-artifact-pages/cli/internal/config"
 	"go.yaml.in/yaml/v4"
 )
 
