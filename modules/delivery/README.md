@@ -6,6 +6,8 @@ It creates or manages the R2 custom domain and owns zone phase-root rulesets for
 
 The custom-domain resource cannot be imported. Set `connect_custom_domain = false` only when an existing connection is managed and verified separately.
 
+`/LICENSE` and `/THIRD_PARTY_NOTICES.txt` are application-bundle objects, not logical reader routes. Their case-normalized paths bypass the SPA rewrite and use the origin's cache headers. After deploying a bundle, verify that these URLs return the actual license/notice text; a 200 response containing the app shell is not successful notice delivery. Missing notice objects must remain origin 404s. These exceptions do not change the `/_control/*` SPA fallback or introduce a WAF.
+
 This submodule uses Terraform `>= 1.5.0, < 2.0.0` and Cloudflare provider `>= 5.24.0, < 6.0.0`. It can be selected from a consumer repository with the Cloudflare module Git URL and `//modules/delivery?ref=<full-commit-sha>`.
 
 The `transform_ruleset_name`, `cache_ruleset_name`, and `response_header_ruleset_name` inputs default to descriptive Artifact Pages names for new phase roots. When importing an existing root, set the corresponding input to its current name before planning; changing a ruleset name requires replacement.
