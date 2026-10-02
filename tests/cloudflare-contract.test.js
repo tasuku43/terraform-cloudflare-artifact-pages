@@ -37,7 +37,7 @@ test('one entry module creates and shares one bucket and one validated retention
     assert.match(deliveryVariables, new RegExp(`variable\\s+"${name}"`, 'u'))
     assert.match(delivery, new RegExp(`name\\s+=\\s+var\\.${name}`, 'u'))
   }
-  assert.match(retention, /rules\s*=\s*concat\(local\.artifact_pages_preview_rules, var\.additional_lifecycle_rules\)/u)
+  assert.match(retention, /rules\s*=\s*local\.lifecycle_rules/u)
   assert.match(retention, /bucket_name\s*=\s*var\.bucket_name/u)
   assert.match(retention, /max_age\s*=\s*var\.preview_retention_days\s*\*\s*24\s*\*\s*60\s*\*\s*60/u)
   assert.match(retentionVariables, /additional_lifecycle_rules must have unique non-empty IDs/u)

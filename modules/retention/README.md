@@ -2,6 +2,10 @@
 
 Manages the complete R2 lifecycle rule set for an existing bucket. It expires only objects under `_previews/` after `preview_retention_days` and aborts incomplete preview multipart uploads after seven days. Preview retention is configured and enforced only through this provider lifecycle policy; it is not part of the Artifact Pages CLI configuration. Expiration is asynchronous and is not an exact-time revocation mechanism.
 
+The two preview actions share one rule because both apply to the same `_previews/` prefix. This also avoids provider 5.26.0 reading an omitted transition back as an empty object, which otherwise causes a recurring diff. Existing installations using two preview rules need one lifecycle update to merge them; the expiry and abort periods do not change. The legacy `abort-preview-multipart-uploads` ID remains reserved.
+
+Rules are sorted by ID to match the R2 API's read-back order. This avoids repeated list-order diffs after apply while retaining each rule's configuration and keeping retention changes visible in plans.
+
 The lifecycle resource owns the bucket's complete lifecycle configuration. Inspect the current rules and supply every rule that must remain through `additional_lifecycle_rules`. This provider resource cannot be imported. Its delete operation only removes Terraform state and leaves the API lifecycle configuration in place; keep it in one state or delete its rules manually through Cloudflare before handing off ownership. This submodule does not create the bucket or manage application/content delivery.
 
 | Input | Description |
