@@ -146,6 +146,64 @@ variable "existing_response_header_rules" {
   default     = []
 }
 
+variable "waf_custom_rules" {
+  description = "Optional operator-owned Cloudflare WAF custom-rule root for the selected public hostname. Omit it to leave the phase unmanaged."
+  type = object({
+    enabled      = optional(bool, true)
+    ruleset_name = optional(string, "Artifact Pages WAF custom rules")
+    presets = optional(object({
+      https_only   = optional(bool, false)
+      ip_allowlist = optional(list(string))
+    }), {})
+    existing_rules = optional(any, [])
+    rules          = optional(any, [])
+  })
+  default = null
+
+  validation {
+    condition = var.waf_custom_rules == null ? true : (
+      can(slice(var.waf_custom_rules.existing_rules, 0, length(var.waf_custom_rules.existing_rules))) &&
+      can(slice(var.waf_custom_rules.rules, 0, length(var.waf_custom_rules.rules)))
+    )
+    error_message = "waf_custom_rules.existing_rules and waf_custom_rules.rules must be ordered list or tuple values."
+  }
+
+  validation {
+    condition = var.waf_custom_rules == null ? true : try(
+      trimspace(var.waf_custom_rules.ruleset_name) != "" &&
+      alltrue([
+        for rule in var.waf_custom_rules.existing_rules :
+        startswith(jsonencode(rule.ref), "\"") && trimspace(rule.ref) != "" &&
+        startswith(jsonencode(rule.expression), "\"") && trimspace(rule.expression) != "" &&
+        startswith(jsonencode(rule.action), "\"") && trimspace(rule.action) != "" &&
+        (try(rule.enabled, null) == null || try(rule.enabled == true, false) || try(rule.enabled == false, false))
+      ]) &&
+      alltrue([
+        for rule in var.waf_custom_rules.rules :
+        startswith(jsonencode(rule.ref), "\"") && trimspace(rule.ref) != "" &&
+        startswith(jsonencode(rule.expression), "\"") && trimspace(rule.expression) != "" &&
+        startswith(jsonencode(rule.action), "\"") && trimspace(rule.action) != "" &&
+        (try(rule.enabled, null) == null || try(rule.enabled == true, false) || try(rule.enabled == false, false))
+      ]),
+      false,
+    )
+    error_message = "Each WAF rule must be an object with non-empty string ref, expression, and action fields; optional enabled must be boolean, and ruleset_name must not be empty."
+  }
+
+  validation {
+    condition = var.waf_custom_rules == null ? true : var.waf_custom_rules.presets.ip_allowlist == null ? true : try(
+      length(var.waf_custom_rules.presets.ip_allowlist) > 0 &&
+      length(distinct(var.waf_custom_rules.presets.ip_allowlist)) == length(var.waf_custom_rules.presets.ip_allowlist) &&
+      alltrue([
+        for cidr in var.waf_custom_rules.presets.ip_allowlist :
+        trimspace(cidr) == cidr && can(cidrhost(cidr, 0))
+      ]),
+      false,
+    )
+    error_message = "waf_custom_rules.presets.ip_allowlist must contain unique, valid IPv4 or IPv6 CIDRs; omit or set null to disable it."
+  }
+}
+
 variable "transform_ruleset_name" {
   description = "Name for the http_request_transform phase root. For an imported ruleset, use its current name."
   type        = string

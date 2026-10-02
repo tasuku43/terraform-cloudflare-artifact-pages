@@ -44,13 +44,21 @@ test('one entry module creates and shares one bucket and one validated retention
   assert.match(retentionVariables, /expire-preview-objects/u)
   assert.match(variables, /preview_retention_days\s*>=\s*1[\s\S]*?floor\(var\.preview_retention_days\)\s*==\s*var\.preview_retention_days/u)
   assert.doesNotMatch(outputs, /previewRetentionDays/u)
+  assert.doesNotMatch(outputs, /waf_custom_rules|ip_allowlist|artifact-pages-waf-presets/u)
   assert.match(outputs, /bucket\s*=\s*cloudflare_r2_bucket\.origin\.name/u)
 })
 
-test('delivery preserves logical routes and cache policy without managing r2.dev', () => {
+test('delivery preserves logical routes, cache policy, and opt-in WAF ownership without managing r2.dev', () => {
   assert.doesNotMatch(delivery, /cloudflare_r2_managed_domain/u)
   assert.match(delivery, /action\s*=\s*"rewrite"[\s\S]*?value\s*=\s*"\/index\.html"/u)
-  assert.doesNotMatch(delivery, /control_block_rule|http_request_firewall_custom|action\s*=\s*"block"/u)
+  assert.match(main, /waf_custom_rules\s*=\s*var\.waf_custom_rules/u)
+  assert.match(variables, /variable\s+"waf_custom_rules"[\s\S]*?default\s*=\s*null/u)
+  assert.match(deliveryVariables, /existing_rules\s*=\s*optional\(any,\s*\[\]\)[\s\S]*?rules\s*=\s*optional\(any,\s*\[\]\)/u)
+  assert.match(delivery, /resource\s+"cloudflare_ruleset"\s+"waf_custom_rules"[\s\S]*?phase\s*=\s*"http_request_firewall_custom"/u)
+  assert.match(delivery, /count\s*=\s*var\.waf_custom_rules\s*==\s*null\s*\?\s*0\s*:\s*1/u)
+  assert.match(delivery, /waf_composed_rules\s*=\s*concat\([\s\S]*?local\.waf_preset_rule[\s\S]*?local\.waf_caller_rules/u)
+  assert.match(delivery, /prevent_destroy\s*=\s*true/u)
+  assert.match(delivery, /artifact-pages-waf-presets/u)
   assert.match(delivery, /lower\(url_decode\(http\.request\.uri\.path, \\"r\\"\)\)/u)
   for (const path of ['/index.html', '/preview-bridge.js', '/_indexes', '/_artifacts', '/_previews']) {
     assert.ok(delivery.includes(`\\"${path}\\"`), `route exclusions must reserve ${path}`)
@@ -136,7 +144,7 @@ test('migration guide states state moves, bucket import, ruleset ownership, and 
   const readme = await read('README.md')
   assert.match(readme, /terraform state mv/u)
   assert.match(readme, /terraform import/u)
-  assert.match(readme, /three zone phase-root rulesets/iu)
+  assert.match(readme, /three required zone phase-root rulesets/iu)
   assert.match(readme, /additional_lifecycle_rules/u)
   assert.match(readme, /does not support importing or destroying/u)
   assert.match(readme, /state mv 'cloudflare_r2_bucket\.origin' 'module\.artifact_pages\.cloudflare_r2_bucket\.origin'/u)
@@ -145,4 +153,19 @@ test('migration guide states state moves, bucket import, ruleset ownership, and 
   assert.match(readme, /account permissions, plan limits, and Cloudflare pricing/u)
   assert.match(readme, /verify that its alternate `r2\.dev` domain is disabled/u)
   assert.match(await read('modules/delivery/README.md'), /enabled `r2\.dev` URL bypasses these hostname rewrite rules/u)
+})
+
+test('combined WAF preset violation truth table admits only requests satisfying every active preset', () => {
+  const cases = [
+    { name: 'HTTPS, port 443, allowed IP', host: true, ssl: true, port: 443, ipAllowed: true, blocked: false },
+    { name: 'unencrypted request', host: true, ssl: false, port: 443, ipAllowed: true, blocked: true },
+    { name: 'encrypted on a different port', host: true, ssl: true, port: 8443, ipAllowed: true, blocked: true },
+    { name: 'source IP outside the allowlist', host: true, ssl: true, port: 443, ipAllowed: false, blocked: true },
+    { name: 'other hostname even when policy conditions fail', host: false, ssl: false, port: 80, ipAllowed: false, blocked: false },
+  ]
+
+  for (const item of cases) {
+    const matchesCombinedBlock = item.host && ((!item.ssl || item.port !== 443) || !item.ipAllowed)
+    assert.equal(matchesCombinedBlock, item.blocked, item.name)
+  }
 })

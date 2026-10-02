@@ -36,6 +36,13 @@ trap 'rm -r "$temporary_root" "$contract_helper_dir"' EXIT
 "$terraform_bin" -chdir=tests/cli-contract init -backend=false -input=false -lockfile=readonly
 "$terraform_bin" -chdir=tests/cli-contract test -no-color
 
+waf_delivery_test_root="$temporary_root/delivery"
+mkdir -p "$waf_delivery_test_root"
+cp -R "$module_root/modules/delivery/." "$waf_delivery_test_root/"
+cp "$module_root/.terraform.lock.hcl" "$waf_delivery_test_root/.terraform.lock.hcl"
+"$terraform_bin" -chdir="$waf_delivery_test_root" init -backend=false -input=false -lockfile=readonly
+"$terraform_bin" -chdir="$waf_delivery_test_root" test -no-color
+TERRAFORM_BIN="$terraform_bin" bash "$module_root/tests/test-waf-prevent-destroy.sh"
 TERRAFORM_BIN="$terraform_bin" python3 "$module_root/tests/test-retention-roundtrip.py"
 
 node --test tests/*.test.js

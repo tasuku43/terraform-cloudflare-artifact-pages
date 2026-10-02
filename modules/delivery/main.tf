@@ -17,6 +17,43 @@ locals {
     "not starts_with(${local.normalized_path}, \"/_previews/\")",
   ])
 
+  waf_presets_active = try(var.waf_custom_rules.presets.https_only, false) || try(var.waf_custom_rules.presets.ip_allowlist != null, false)
+
+  waf_preset_violations = compact([
+    try(var.waf_custom_rules.presets.https_only, false) ? "not ssl or cf.edge.server_port ne 443" : "",
+    try(var.waf_custom_rules.presets.ip_allowlist, null) != null ? "not ip.src in {${join(" ", try(var.waf_custom_rules.presets.ip_allowlist, []))}}" : "",
+  ])
+
+  waf_preset_rule = local.waf_presets_active ? [{
+    ref         = "artifact-pages-waf-presets"
+    description = "Block requests to this hostname that violate the enabled access presets."
+    expression  = "(${local.host_match}) and (${join(" or ", [for predicate in local.waf_preset_violations : "(${predicate})"])})"
+    action      = "block"
+    enabled     = var.waf_custom_rules.enabled
+  }] : []
+
+  waf_caller_rules = [
+    for rule in try(var.waf_custom_rules.rules, []) : merge(rule, {
+      expression = "(${local.host_match}) and (${rule.expression})"
+      enabled    = try(var.waf_custom_rules.enabled, false) && (try(rule.enabled, true) != false)
+    })
+  ]
+
+  waf_ruleset_name = try(var.waf_custom_rules.ruleset_name, "Artifact Pages WAF custom rules")
+
+  waf_composed_rules = concat(
+    try(var.waf_custom_rules.existing_rules, []),
+    local.waf_preset_rule,
+    local.waf_caller_rules,
+  )
+
+  waf_composed_refs = [for rule in local.waf_composed_rules : rule.ref]
+
+  waf_final_expression_lengths = concat(
+    [for rule in local.waf_preset_rule : length(rule.expression)],
+    [for rule in local.waf_caller_rules : length(rule.expression)],
+  )
+
   logical_route_rule = {
     ref         = "artifact-pages-logical-routes"
     description = "Serve the SPA shell for logical application routes."
@@ -118,6 +155,46 @@ resource "cloudflare_r2_custom_domain" "public" {
   enabled     = true
   zone_id     = var.zone_id
   min_tls     = var.minimum_tls_version
+}
+
+resource "cloudflare_ruleset" "waf_custom_rules" {
+  count = var.waf_custom_rules == null ? 0 : 1
+
+  zone_id     = var.zone_id
+  name        = local.waf_ruleset_name
+  description = "Operator-configured WAF custom rules for the Artifact Pages hostname."
+  kind        = "zone"
+  phase       = "http_request_firewall_custom"
+  rules       = local.waf_composed_rules
+
+  lifecycle {
+    prevent_destroy = true
+
+    precondition {
+      condition     = length(local.waf_composed_rules) > 0
+      error_message = "waf_custom_rules must preserve or define at least one rule."
+    }
+
+    precondition {
+      condition     = length(distinct(local.waf_composed_refs)) == length(local.waf_composed_refs)
+      error_message = "WAF rule refs must be unique across existing rules, the generated preset rule, and caller rules."
+    }
+
+    precondition {
+      condition     = alltrue([for ref in local.waf_composed_refs : !(local.waf_presets_active == false && ref == "artifact-pages-waf-presets")])
+      error_message = "The ref artifact-pages-waf-presets is reserved for the generated combined preset rule."
+    }
+
+    precondition {
+      condition     = alltrue([for expression_length in local.waf_final_expression_lengths : expression_length <= 4096])
+      error_message = "Each hostname-wrapped WAF rule expression must be no longer than 4,096 characters."
+    }
+
+    precondition {
+      condition     = trimspace(local.waf_ruleset_name) != ""
+      error_message = "waf_custom_rules.ruleset_name must not be empty."
+    }
+  }
 }
 
 resource "cloudflare_ruleset" "logical_routes" {

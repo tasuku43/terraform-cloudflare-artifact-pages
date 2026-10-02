@@ -12,6 +12,6 @@ test('project and dependency notices bypass SPA fallback and honor origin cache 
     assert.ok(cachePaths.includes(`\u0024{local.normalized_path} eq \\"${path}\\"`), `${path} must honor the published cache policy`)
   }
   assert.match(delivery, /normalized_path\s*=\s*"lower\(url_decode\(/u)
-  assert.doesNotMatch(delivery, /http_request_firewall_custom|control_block_rule/u)
+  assert.doesNotMatch(delivery, /control_block_rule/u)
   assert.doesNotMatch(exclusions, /\/_control/u)
 })

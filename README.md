@@ -1,6 +1,6 @@
 # Artifact Pages Cloudflare module
 
-This root module creates one private R2 bucket and connects it to the Cloudflare delivery and preview-retention configuration used by Artifact Pages. It preserves the static application/content planes and logical SPA routes, rewrites unmatched paths—including `/_control/*`—to `/index.html`, respects origin cache headers, and configures provider-managed `_previews/` expiration. It leaves the alternate `r2.dev` domain unmanaged; for a newly created private bucket, Cloudflare leaves that domain disabled by default. It does not create a WAF or firewall ruleset. Production artifacts and raw preview objects receive the same trusted-HTML Content Security Policy: HTTPS resources are allowed, insecure HTTP resources are blocked, and the rule grants no CORS access.
+This root module creates one private R2 bucket and connects it to the Cloudflare delivery and preview-retention configuration used by Artifact Pages. It preserves the static application/content planes and logical SPA routes, rewrites unmatched paths—including `/_control/*`—to `/index.html`, respects origin cache headers, and configures provider-managed `_previews/` expiration. It leaves the alternate `r2.dev` domain unmanaged; for a newly created private bucket, Cloudflare leaves that domain disabled by default. An optional `waf_custom_rules` input manages operator-owned rules for the selected hostname; its null default leaves the custom-firewall phase unmanaged. Production artifacts and raw preview objects receive the same trusted-HTML Content Security Policy: HTTPS resources are allowed, insecure HTTP resources are blocked, and the rule grants no CORS access.
 
 The module does not deploy the SPA, publish a registry or site, create publisher credentials, configure viewer accounts, or add a request-time service. Cloudflare Access remains an operator-managed edge policy. The CLI continues to publish application and content objects through its configured credentials.
 
@@ -43,9 +43,21 @@ See [`examples/registry-consumer`](examples/registry-consumer) for the complete 
 | `existing_transform_rules` | No | Complete existing transform phase-root rules, in execution order. Defaults to `[]`. |
 | `existing_cache_rules` | No | Complete existing cache phase-root rules, in execution order. Defaults to `[]`. |
 | `existing_response_header_rules` | No | Complete existing response-header transform phase-root rules, in execution order. Defaults to `[]`. |
+| `waf_custom_rules` | No | Optional operator-owned WAF custom-rule root. Null leaves the phase unmanaged; see [WAF rules](#optional-waf-custom-rules) for rule preservation, presets, and disable behavior. |
 | `transform_ruleset_name` | No | Phase-root name. Defaults to `Artifact Pages logical routes`; retain an imported root's existing name. |
 | `cache_ruleset_name` | No | Phase-root name. Defaults to `Artifact Pages origin cache policy`; retain an imported root's existing name. |
 | `response_header_ruleset_name` | No | Phase-root name. Defaults to `Artifact Pages trusted HTML resource policy`; retain an imported root's existing name. |
+
+## Optional WAF custom rules
+
+The `waf_custom_rules` input is optional and defaults to `null`. A non-null object creates one zone ruleset in the `http_request_firewall_custom` phase and must preserve or add at least one rule. `existing_rules` and `rules` are ordered provider-native rule objects: pass all existing rules when importing an existing root, and include provider-supported action parameters as needed. The module requires non-empty string `ref`, `expression`, and `action` fields, but leaves action and action-parameter compatibility to the Cloudflare provider and API. Caller rule expressions are wrapped in a selected-host guard, while preserved existing rules are passed through unchanged. Composition order is existing rules, one generated preset rule if any preset is active, then caller rules.
+
+The two optional presets are:
+
+- `presets.https_only = true` blocks this hostname unless the client connection is encrypted and Cloudflare received it on port 443. It does not redirect HTTP.
+- `presets.ip_allowlist = ["192.0.2.10/32"]` blocks this hostname unless the client source address matches one of the supplied IPv4 or IPv6 CIDRs. The `192.0.2.10/32` and `2001:db8::/128` values below are documentation-only reserved examples; replace them with the operator's real public CIDRs. Omit or set the input to `null` for no IP restriction; an explicit empty, invalid, or duplicate list is rejected.
+
+When both presets are enabled, their violations are combined with OR into one Block rule, so traffic is admitted only when every enabled preset passes. Either preset uses one zone custom-rule slot. Set `enabled = false` to disable generated and caller rules in place while preserving imported existing rules. A configured policy owns the complete custom-firewall phase root and enables `prevent_destroy`; removing the whole module configuration also removes that protection, so keep a non-null policy with at least one rule during managed retirement. This input does not configure Cloudflare Access, authentication, or viewer accounts. Cloudflare currently requires `Zone WAF Write` for a non-null policy; check current plan entitlements, phase quotas, and action availability before planning.
 
 The module supports Terraform `>= 1.5.0, < 2.0.0` and Cloudflare provider `>= 5.24.0, < 6.0.0`. Local acceptance uses Terraform 1.9.8. The package-root lock file selects Cloudflare provider 5.26.0; the clean local consumer pins 5.24.0 to check the declared minimum supported provider version.
 
@@ -74,16 +86,17 @@ The CLI uses these names only for `site publish` and `preview publish`. Other co
 
 ## Resource ownership and apply review
 
-The caller must select the Cloudflare account, an existing managed DNS zone, a hostname in that zone, and the preview retention period. Terraform manages the R2 bucket, the complete `http_request_transform`, `http_request_cache_settings`, and `http_response_headers_transform` phase-root rulesets, and the bucket's complete lifecycle rule set. There is no `http_request_firewall_custom` ruleset. Unmatched paths, including reserved `/_control/*` object names, use the application shell and never request those object keys. The response-header rules apply the trusted HTML resource policy to raw `/_artifacts/<site>/*` and `/_previews/<site>/revisions/<sha>/files/*` paths on the selected hostname. They keep preview documents on the application origin; they do not add a hostname or CORS grant.
+The caller must select the Cloudflare account, an existing managed DNS zone, a hostname in that zone, and the preview retention period. Terraform manages the R2 bucket, the complete `http_request_transform`, `http_request_cache_settings`, and `http_response_headers_transform` phase-root rulesets, the bucket's complete lifecycle rule set, and—when `waf_custom_rules` is non-null—the complete `http_request_firewall_custom` phase root. Unmatched paths, including reserved `/_control/*` object names, use the application shell and never request those object keys. The response-header rules apply the trusted HTML resource policy to raw `/_artifacts/<site>/*` and `/_previews/<site>/revisions/<sha>/files/*` paths on the selected hostname. They keep preview documents on the application origin; they do not add a hostname or CORS grant.
 
 Before the first apply:
 
-1. Inspect the three zone phase-root rulesets managed by this module. If one already exists, record its current name and rules. Set the matching `*_ruleset_name` input to the current name before import; Cloudflare ruleset names are immutable, and changing one after import plans replacement. Then import it into the corresponding resource and pass every existing rule through the matching `existing_*_rules` input in its existing execution order. For example:
+1. Inspect the three required zone phase-root rulesets and the optional WAF custom-rule root. If a phase root already exists, record its current name and rules. Set the matching `*_ruleset_name` input to the current name before import; Cloudflare ruleset names are immutable, and changing one after import plans replacement. Then import it into the corresponding resource and pass every existing rule through the matching existing-rule input in its existing execution order. The WAF root uses `waf_custom_rules.ruleset_name` and `waf_custom_rules.existing_rules`. For example:
 
    ```sh
    terraform import 'module.artifact_pages.module.delivery.cloudflare_ruleset.logical_routes' 'zones/<zone-id>/<ruleset-id>'
    terraform import 'module.artifact_pages.module.delivery.cloudflare_ruleset.origin_cache_policy' 'zones/<zone-id>/<ruleset-id>'
    terraform import 'module.artifact_pages.module.delivery.cloudflare_ruleset.trusted_html_resource_policy' 'zones/<zone-id>/<ruleset-id>'
+   terraform import 'module.artifact_pages.module.delivery.cloudflare_ruleset.waf_custom_rules[0]' 'zones/<zone-id>/<ruleset-id>'
    ```
 
    The default names and empty rule lists are for new phase roots. They do not preserve or adopt existing rulesets by themselves.
@@ -92,7 +105,7 @@ Before the first apply:
 4. Keep the bucket content recoverable. The module does not enable a force-destroy option; empty or migrate the bucket deliberately before destroying it. Removing the module is not a content backup or a CLI deployment rollback.
 5. Check current account permissions, plan limits, and Cloudflare pricing for R2 storage/requests, custom domains, and rules. The module itself does not estimate account-specific charges.
 
-The Cloudflare provider needs permissions to manage R2 storage, R2 custom domains, lifecycle rules, and the three zone ruleset phases. Configure `cloudflare` authentication in the caller, typically through `CLOUDFLARE_API_TOKEN`; do not put token values in `.tf`, `.tfvars`, outputs, or committed examples.
+The Cloudflare provider needs permissions to manage R2 storage, R2 custom domains, lifecycle rules, and the three required zone ruleset phases. A non-null WAF policy additionally requires `Zone WAF Write`. Configure `cloudflare` authentication in the caller, typically through `CLOUDFLARE_API_TOKEN`; do not put token values in `.tf`, `.tfvars`, outputs, or committed examples.
 
 ## Existing-bucket use
 
@@ -136,4 +149,4 @@ ARTIFACT_PAGES_APPREPO_DIR=/absolute/oss/checkout ./scripts/validate.sh
 
 For standalone package and exact-commit consumer checks without an OSS checkout, run `python3 scripts/check-package.py --commit FULL_SHA` under Terraform 1.9.8. See [release preparation and publication](RELEASE.md) for provenance, minimum-provider checks, owner approvals, and subsequent upgrades.
 
-The validation runs formatting, backend-free initialization, validation, a no-refresh plan for the clean local caller, negative-input checks, source-contract tests, and an isolated `terraform_data` state-move fixture for the documented module-address migration. It does not authenticate to or modify a Cloudflare account. Real zone-rule compatibility, public routing/cache behavior, retention timing, R2 consistency, and purge propagation remain T15/T14 provider proof.
+The validation runs formatting, backend-free initialization, validation, root and delivery-submodule provider-mock WAF plans, retention-composition plans, negative-input checks, a real-provider lifecycle round-trip against a loopback-only API fixture (apply followed by two no-change refreshed plans and a retention-change plan), Node source/contract tests, an isolated stateful `terraform_data` check for `prevent_destroy`, and a separate state-move fixture for the documented module-address migration. It does not authenticate to or modify a Cloudflare account. Real zone-rule expression parsing, plan entitlement, quota availability, live enforcement, public routing/cache behavior, retention timing, R2 consistency, and purge propagation remain provider/live proof.
