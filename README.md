@@ -114,10 +114,12 @@ Do not run the new-bucket plan until the import and both module moves are reflec
 
 ## Local validation
 
-From this repository, with Terraform 1.9.8:
+For the full developer integration suite, use Terraform 1.9.8, Node.js, Go, Python 3 (standard library only for the local API fixture), and a separately selected Artifact Pages OSS checkout:
 
 ```sh
-./scripts/validate.sh
+ARTIFACT_PAGES_APPREPO_DIR=/absolute/oss/checkout ./scripts/validate.sh
 ```
+
+For standalone package and exact-commit consumer checks without an OSS checkout, run `python3 scripts/check-package.py --commit FULL_SHA` under Terraform 1.9.8. See [release preparation and publication](RELEASE.md) for provenance, minimum-provider checks, owner approvals, and subsequent upgrades.
 
 The validation runs formatting, backend-free initialization, validation, a no-refresh plan for the clean local caller, negative-input checks, source-contract tests, and an isolated `terraform_data` state-move fixture for the documented module-address migration. It does not authenticate to or modify a Cloudflare account. Real zone-rule compatibility, public routing/cache behavior, retention timing, R2 consistency, and purge propagation remain T15/T14 provider proof.
