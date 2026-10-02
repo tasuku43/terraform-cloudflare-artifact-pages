@@ -47,6 +47,11 @@ run "nondefault_credential_env_overrides_parse_in_cli" {
     access_key_id_env     = "CUSTOM_R2_ACCESS_KEY_ID"
     secret_access_key_env = "CUSTOM_R2_SECRET_ACCESS_KEY"
     api_token_env         = "CUSTOM_CLOUDFLARE_API_TOKEN"
+    registry_reader = {
+      access_key_id_env     = "CF_R2_REGISTRY_READER_ACCESS_KEY_ID"
+      secret_access_key_env = "CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY"
+      session_token_env     = "CF_R2_REGISTRY_READER_SESSION_TOKEN"
+    }
   }
 
   assert {

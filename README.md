@@ -36,6 +36,7 @@ See [`examples/registry-consumer`](examples/registry-consumer) for the complete 
 | `access_key_id_env` | No | Environment-variable name for the primary R2 access key ID in generated CLI configuration. Defaults to `CF_R2_ACCESS_KEY_ID`. |
 | `secret_access_key_env` | No | Environment-variable name for the primary R2 secret access key in generated CLI configuration. Defaults to `CF_R2_SECRET_ACCESS_KEY`. |
 | `api_token_env` | No | Environment-variable name for the Cloudflare API token in generated CLI configuration. Defaults to `CF_API_TOKEN`. |
+| `registry_reader` | No | Optional delegated-publisher registry-reader environment names. Omit it for the normal setup. When set, provide both `access_key_id_env` and `secret_access_key_env`; `session_token_env` is optional for temporary credentials. |
 | `additional_lifecycle_rules` | No | Additional R2 lifecycle rules to preserve alongside the module-owned preview rules. Defaults to `[]`; supply all existing non-module rules when taking lifecycle ownership of a bucket. |
 | `minimum_tls_version` | No | Custom-domain TLS minimum. Defaults to `1.2`. |
 | `connect_custom_domain` | No | Create the R2 custom-domain connection. Defaults to `true`; set `false` only when the same connection is already managed outside Terraform because the provider cannot import it. |
@@ -56,7 +57,20 @@ The module supports Terraform `>= 1.5.0, < 2.0.0` and Cloudflare provider `>= 5.
 | `public_base_url` | `https://<public_hostname>` for `cloudflare.publicBaseURL`. |
 | `artifact_pages_deployment_config_yaml` | Ready-to-copy v1 target YAML with non-secret identifiers and the effective bucket. Default credential environment names are supplied by the CLI and omitted; non-default environment-name overrides are emitted. Put credential values outside Terraform state and source control. |
 
-The generated CLI YAML includes the effective created bucket name, so an explicit `bucket_name` override is preserved. It includes only the primary credential-variable names; temporary session credentials and the optional registry-reader credential can be configured separately when needed. Preview retention is configured and enforced only through `preview_retention_days` and the R2 lifecycle rules; the CLI config does not contain or enforce an expiry value. The retention module appends the two required preview rules to `additional_lifecycle_rules`.
+The generated CLI YAML includes the effective created bucket name, so an explicit `bucket_name` override is preserved. CLI-default environment names for the primary R2 key, secret, and API token are omitted. By default the YAML has no registry-reader environment names; set `registry_reader` explicitly to add the delegated publisher's separate reader identity. Temporary primary session credentials remain a CLI config option and are not output by this module. Preview retention is configured and enforced only through `preview_retention_days` and the R2 lifecycle rules; the CLI config does not contain or enforce an expiry value. The retention module appends the two required preview rules to `additional_lifecycle_rules`.
+
+For a delegated publisher, set the optional object in the module call:
+
+```hcl
+registry_reader = {
+  access_key_id_env     = "CF_R2_REGISTRY_READER_ACCESS_KEY_ID"
+  secret_access_key_env = "CF_R2_REGISTRY_READER_SECRET_ACCESS_KEY"
+  # Include only when Cloudflare issued temporary reader credentials.
+  session_token_env = "CF_R2_REGISTRY_READER_SESSION_TOKEN"
+}
+```
+
+The CLI uses these names only for `site publish` and `preview publish`. Other commands ignore the reader values, and a configuration without this object uses the primary credential to read the registry.
 
 ## Resource ownership and apply review
 

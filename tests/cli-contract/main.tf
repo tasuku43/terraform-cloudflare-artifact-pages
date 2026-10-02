@@ -37,6 +37,15 @@ variable "api_token_env" {
   default = "CF_API_TOKEN"
 }
 
+variable "registry_reader" {
+  type = object({
+    access_key_id_env     = string
+    secret_access_key_env = string
+    session_token_env     = optional(string)
+  })
+  default = null
+}
+
 variable "apprepo_dir" {
   type = string
 }
@@ -56,6 +65,7 @@ module "artifact_pages" {
   access_key_id_env      = var.access_key_id_env
   secret_access_key_env  = var.secret_access_key_env
   api_token_env          = var.api_token_env
+  registry_reader        = var.registry_reader
 }
 
 data "external" "cli_contract" {
@@ -63,14 +73,17 @@ data "external" "cli_contract" {
   working_dir = var.apprepo_dir
 
   query = {
-    yaml                     = module.artifact_pages.artifact_pages_deployment_config_yaml
-    provider                 = "cloudflare"
-    expected_bucket          = var.expected_bucket
-    expected_account_id      = "00000000000000000000000000000000"
-    expected_zone_id         = "11111111111111111111111111111111"
-    expected_public_base_url = "https://contracts.example.com"
-    expected_access_key_env  = var.access_key_id_env
-    expected_secret_key_env  = var.secret_access_key_env
-    expected_api_token_env   = var.api_token_env
+    yaml                                           = module.artifact_pages.artifact_pages_deployment_config_yaml
+    provider                                       = "cloudflare"
+    expected_bucket                                = var.expected_bucket
+    expected_account_id                            = "00000000000000000000000000000000"
+    expected_zone_id                               = "11111111111111111111111111111111"
+    expected_public_base_url                       = "https://contracts.example.com"
+    expected_access_key_env                        = var.access_key_id_env
+    expected_secret_key_env                        = var.secret_access_key_env
+    expected_api_token_env                         = var.api_token_env
+    expected_registry_reader_access_key_id_env     = var.registry_reader == null ? "" : var.registry_reader.access_key_id_env
+    expected_registry_reader_secret_access_key_env = var.registry_reader == null ? "" : var.registry_reader.secret_access_key_env
+    expected_registry_reader_session_token_env     = var.registry_reader == null ? "" : (var.registry_reader.session_token_env == null ? "" : var.registry_reader.session_token_env)
   }
 }

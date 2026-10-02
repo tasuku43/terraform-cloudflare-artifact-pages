@@ -11,15 +11,18 @@ import (
 )
 
 type request struct {
-	YAML             string `json:"yaml"`
-	Provider         string `json:"provider"`
-	ExpectedBucket   string `json:"expected_bucket"`
-	ExpectedAccount  string `json:"expected_account_id"`
-	ExpectedZone     string `json:"expected_zone_id"`
-	ExpectedBaseURL  string `json:"expected_public_base_url"`
-	ExpectedAccess   string `json:"expected_access_key_env"`
-	ExpectedSecret   string `json:"expected_secret_key_env"`
-	ExpectedAPIToken string `json:"expected_api_token_env"`
+	YAML                  string `json:"yaml"`
+	Provider              string `json:"provider"`
+	ExpectedBucket        string `json:"expected_bucket"`
+	ExpectedAccount       string `json:"expected_account_id"`
+	ExpectedZone          string `json:"expected_zone_id"`
+	ExpectedBaseURL       string `json:"expected_public_base_url"`
+	ExpectedAccess        string `json:"expected_access_key_env"`
+	ExpectedSecret        string `json:"expected_secret_key_env"`
+	ExpectedAPIToken      string `json:"expected_api_token_env"`
+	ExpectedReaderAccess  string `json:"expected_registry_reader_access_key_id_env"`
+	ExpectedReaderSecret  string `json:"expected_registry_reader_secret_access_key_env"`
+	ExpectedReaderSession string `json:"expected_registry_reader_session_token_env"`
 }
 
 func main() {
@@ -54,8 +57,8 @@ func main() {
 	if target.AccessKeyIDEnv != input.ExpectedAccess || target.SecretAccessKeyEnv != input.ExpectedSecret || target.APITokenEnv != input.ExpectedAPIToken {
 		fail("parsed credential environment names = %q/%q/%q, want %q/%q/%q", target.AccessKeyIDEnv, target.SecretAccessKeyEnv, target.APITokenEnv, input.ExpectedAccess, input.ExpectedSecret, input.ExpectedAPIToken)
 	}
-	if target.SessionTokenEnv != "" || target.RegistryReaderAccessKeyIDEnv != "" || target.RegistryReaderSecretAccessKeyEnv != "" || target.RegistryReaderSessionTokenEnv != "" {
-		fail("minimal Cloudflare output unexpectedly includes advanced authentication fields")
+	if target.SessionTokenEnv != "" || target.RegistryReaderAccessKeyIDEnv != input.ExpectedReaderAccess || target.RegistryReaderSecretAccessKeyEnv != input.ExpectedReaderSecret || target.RegistryReaderSessionTokenEnv != input.ExpectedReaderSession {
+		fail("parsed advanced credential environment names = %q/%q/%q/%q, want primary session empty and registry-reader %q/%q/%q", target.SessionTokenEnv, target.RegistryReaderAccessKeyIDEnv, target.RegistryReaderSecretAccessKeyEnv, target.RegistryReaderSessionTokenEnv, input.ExpectedReaderAccess, input.ExpectedReaderSecret, input.ExpectedReaderSession)
 	}
 	root := yamlRoot(input.YAML)
 	cloudflare := mappingValue(root, "cloudflare")
@@ -81,9 +84,19 @@ func main() {
 	if target.APITokenEnv == "CF_API_TOKEN" && mappingValue(cloudflare, "apiTokenEnv") != nil {
 		fail("default apiTokenEnv should be omitted from the minimal generated YAML")
 	}
-	for _, field := range []string{"accessKeyId", "secretAccessKey", "apiToken", "sessionTokenEnv", "registryReaderAccessKeyIdEnv", "registryReaderSecretAccessKeyEnv", "registryReaderSessionTokenEnv"} {
+	for _, field := range []string{"accessKeyId", "secretAccessKey", "apiToken", "sessionTokenEnv"} {
 		if mappingValue(cloudflare, field) != nil {
 			fail("generated CLI YAML must not include cloudflare.%s", field)
+		}
+	}
+	for field, expected := range map[string]string{
+		"registryReaderAccessKeyIdEnv":     input.ExpectedReaderAccess,
+		"registryReaderSecretAccessKeyEnv": input.ExpectedReaderSecret,
+		"registryReaderSessionTokenEnv":    input.ExpectedReaderSession,
+	} {
+		actual := stringValue(mappingValue(cloudflare, field))
+		if actual != expected {
+			fail("raw Terraform YAML field cloudflare.%s = %q, want %q", field, actual, expected)
 		}
 	}
 	for field, expected := range map[string]string{

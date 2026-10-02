@@ -86,6 +86,25 @@ variable "api_token_env" {
   }
 }
 
+variable "registry_reader" {
+  description = "Optional environment-variable names for a delegated publisher's read-only registry credential. Omit this object for the normal setup."
+  type = object({
+    access_key_id_env     = string
+    secret_access_key_env = string
+    session_token_env     = optional(string)
+  })
+  default = null
+
+  validation {
+    condition = var.registry_reader == null ? true : (
+      can(regex("^[A-Za-z_][A-Za-z0-9_]*$", var.registry_reader.access_key_id_env)) &&
+      can(regex("^[A-Za-z_][A-Za-z0-9_]*$", var.registry_reader.secret_access_key_env)) &&
+      (var.registry_reader.session_token_env == null || can(regex("^[A-Za-z_][A-Za-z0-9_]*$", var.registry_reader.session_token_env)))
+    )
+    error_message = "registry_reader must contain valid environment-variable names for its access key, secret, and optional session token."
+  }
+}
+
 variable "additional_lifecycle_rules" {
   description = "Additional Cloudflare R2 lifecycle rules to keep in the bucket's complete lifecycle configuration. Do not duplicate the module-owned preview rules."
   type        = list(any)

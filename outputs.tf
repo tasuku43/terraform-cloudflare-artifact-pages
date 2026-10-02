@@ -23,6 +23,13 @@ output "artifact_pages_deployment_config_yaml" {
       var.access_key_id_env == "CF_R2_ACCESS_KEY_ID" ? {} : { accessKeyIdEnv = var.access_key_id_env },
       var.secret_access_key_env == "CF_R2_SECRET_ACCESS_KEY" ? {} : { secretAccessKeyEnv = var.secret_access_key_env },
       var.api_token_env == "CF_API_TOKEN" ? {} : { apiTokenEnv = var.api_token_env },
+      var.registry_reader == null ? {} : merge(
+        {
+          registryReaderAccessKeyIdEnv     = var.registry_reader.access_key_id_env
+          registryReaderSecretAccessKeyEnv = var.registry_reader.secret_access_key_env
+        },
+        var.registry_reader.session_token_env == null ? {} : { registryReaderSessionTokenEnv = var.registry_reader.session_token_env },
+      ),
     )
   })
 }
