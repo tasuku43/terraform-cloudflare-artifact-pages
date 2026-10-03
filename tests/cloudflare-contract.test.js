@@ -86,7 +86,7 @@ test('delivery disables body-rewriting edge features for the hostname only throu
   const readme = await read('README.md')
   assert.ok(readme.includes('| `existing_config_rules` | No |'))
   assert.ok(readme.includes('| `config_ruleset_name` | No |'))
-  assert.match(readme, /Config Rules Edit/u)
+  assert.match(readme, /Config Settings Edit/u)
   assert.match(readme, /cloudflare_ruleset\.unchanged_delivery/u)
 })
 
