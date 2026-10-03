@@ -115,3 +115,19 @@ run "invalid_cidr_fails_custom_validation" {
 
   expect_failures = [var.waf_custom_rules]
 }
+
+run "config_phase_inputs_pass_through_the_entry_module" {
+  command = plan
+
+  variables {
+    config_ruleset_name = "Imported config root"
+    existing_config_rules = [
+      { ref = "operator-bic", expression = "true", action = "set_config", action_parameters = { bic = true } },
+    ]
+  }
+
+  assert {
+    condition     = output.public_base_url == "https://artifacts.example.test"
+    error_message = "The entry module must accept existing_config_rules and config_ruleset_name."
+  }
+}

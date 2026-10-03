@@ -15,10 +15,12 @@ module "delivery" {
   existing_transform_rules       = var.existing_transform_rules
   existing_cache_rules           = var.existing_cache_rules
   existing_response_header_rules = var.existing_response_header_rules
+  existing_config_rules          = var.existing_config_rules
   waf_custom_rules               = var.waf_custom_rules
   transform_ruleset_name         = var.transform_ruleset_name
   cache_ruleset_name             = var.cache_ruleset_name
   response_header_ruleset_name   = var.response_header_ruleset_name
+  config_ruleset_name            = var.config_ruleset_name
 }
 
 module "retention" {
