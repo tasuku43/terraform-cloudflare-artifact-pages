@@ -146,6 +146,12 @@ variable "existing_response_header_rules" {
   default     = []
 }
 
+variable "existing_config_rules" {
+  description = "Complete existing http_config_settings root ruleset rules, in execution order, to preserve when this module owns that phase."
+  type        = list(any)
+  default     = []
+}
+
 variable "waf_custom_rules" {
   description = "Optional operator-owned Cloudflare WAF custom-rule root for the selected public hostname. Omit it to leave the phase unmanaged."
   type = object({
@@ -220,4 +226,10 @@ variable "response_header_ruleset_name" {
   description = "Name for the http_response_headers_transform phase root. For an imported ruleset, use its current name."
   type        = string
   default     = "Artifact Pages trusted HTML resource policy"
+}
+
+variable "config_ruleset_name" {
+  description = "Name for the http_config_settings phase root. For an imported ruleset, use its current name."
+  type        = string
+  default     = "Artifact Pages unchanged delivery"
 }

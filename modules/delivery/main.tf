@@ -101,6 +101,29 @@ locals {
     }
   }
 
+  # Edge features that rewrite or inject into response bodies. Delivered bytes must equal the
+  # published objects, so each is forced to its non-modifying value for this hostname only.
+  unchanged_delivery_rule = {
+    ref         = "artifact-pages-unchanged-delivery"
+    description = "Deliver published objects byte-for-byte: disable edge features that rewrite or inject into response bodies."
+    expression  = "(${local.host_match})"
+    action      = "set_config"
+    enabled     = true
+    action_parameters = {
+      email_obfuscation        = false
+      rocket_loader            = false
+      automatic_https_rewrites = false
+      fonts                    = false
+      disable_rum              = true
+      disable_zaraz            = true
+      content_converter        = false
+      polish                   = "off"
+    }
+  }
+
+  config_composed_rules = concat(var.existing_config_rules, [local.unchanged_delivery_rule])
+  config_composed_refs  = [for rule in local.config_composed_rules : try(rule.ref, "")]
+
   trusted_artifact_csp_expression = "concat(\"default-src https://\", http.host, \"/_artifacts/\", split(http.request.uri.path, \"/\", 4)[2], \"/ https: data: blob:; script-src https://\", http.host, \"/_artifacts/\", split(http.request.uri.path, \"/\", 4)[2], \"/ https: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob:; style-src https://\", http.host, \"/_artifacts/\", split(http.request.uri.path, \"/\", 4)[2], \"/ https: 'unsafe-inline' data: blob:\")"
 
   trusted_preview_csp_expression = "concat(\"default-src https://\", http.host, \"/_previews/\", split(http.request.uri.path, \"/\", 6)[2], \"/revisions/\", split(http.request.uri.path, \"/\", 6)[4], \"/files/ https: data: blob:; script-src https://\", http.host, \"/_previews/\", split(http.request.uri.path, \"/\", 6)[2], \"/revisions/\", split(http.request.uri.path, \"/\", 6)[4], \"/files/ https: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob:; style-src https://\", http.host, \"/_previews/\", split(http.request.uri.path, \"/\", 6)[2], \"/revisions/\", split(http.request.uri.path, \"/\", 6)[4], \"/files/ https: 'unsafe-inline' data: blob:\")"
@@ -225,4 +248,21 @@ resource "cloudflare_ruleset" "trusted_html_resource_policy" {
   phase       = "http_response_headers_transform"
 
   rules = concat(var.existing_response_header_rules, local.trusted_html_resource_policy_rules)
+}
+
+resource "cloudflare_ruleset" "unchanged_delivery" {
+  zone_id     = var.zone_id
+  name        = var.config_ruleset_name
+  description = "Disable edge features that rewrite or inject into HTML and other response bodies for the Artifact Pages hostname."
+  kind        = "zone"
+  phase       = "http_config_settings"
+
+  rules = local.config_composed_rules
+
+  lifecycle {
+    precondition {
+      condition     = length(distinct([for ref in local.config_composed_refs : ref if ref != ""])) == length([for ref in local.config_composed_refs : ref if ref != ""])
+      error_message = "Configuration rule refs must be unique across existing_config_rules and the generated artifact-pages-unchanged-delivery rule."
+    }
+  }
 }

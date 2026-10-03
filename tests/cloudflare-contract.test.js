@@ -71,6 +71,25 @@ test('delivery preserves logical routes, cache policy, and opt-in WAF ownership 
   }
 })
 
+test('delivery disables body-rewriting edge features for the hostname only through an owned config root', async () => {
+  assert.match(delivery, /resource\s+"cloudflare_ruleset"\s+"unchanged_delivery"[\s\S]*?phase\s*=\s*"http_config_settings"/u)
+  assert.match(delivery, /action\s*=\s*"set_config"/u)
+  assert.match(delivery, /expression\s*=\s*"\(\$\{local\.host_match\}\)"/u)
+  for (const setting of ['email_obfuscation = false', 'rocket_loader = false', 'automatic_https_rewrites = false', 'fonts = false', 'disable_rum = true', 'disable_zaraz = true', 'content_converter = false', 'polish = "off"']) {
+    assert.ok(delivery.replace(/\s+/gu, ' ').includes(setting), `config rule must set ${setting}`)
+  }
+  assert.match(delivery, /concat\(var\.existing_config_rules,/u)
+  assert.match(main, /existing_config_rules\s*=\s*var\.existing_config_rules/u)
+  assert.match(main, /config_ruleset_name\s*=\s*var\.config_ruleset_name/u)
+  assert.match(variables, /variable\s+"existing_config_rules"/u)
+  assert.match(deliveryVariables, /variable\s+"config_ruleset_name"/u)
+  const readme = await read('README.md')
+  assert.ok(readme.includes('| `existing_config_rules` | No |'))
+  assert.ok(readme.includes('| `config_ruleset_name` | No |'))
+  assert.match(readme, /Config Rules Edit/u)
+  assert.match(readme, /cloudflare_ruleset\.unchanged_delivery/u)
+})
+
 test('trusted production and preview HTML receive path-scoped HTTPS CSP without a CORS grant', async () => {
   assert.match(delivery, /phase\s*=\s*"http_response_headers_transform"/u)
   assert.match(delivery, /trusted_artifact_csp_expression\s*=\s*"concat\(/u)
@@ -144,7 +163,7 @@ test('migration guide states state moves, bucket import, ruleset ownership, and 
   const readme = await read('README.md')
   assert.match(readme, /terraform state mv/u)
   assert.match(readme, /terraform import/u)
-  assert.match(readme, /three required zone phase-root rulesets/iu)
+  assert.match(readme, /four required zone phase-root rulesets/iu)
   assert.match(readme, /additional_lifecycle_rules/u)
   assert.match(readme, /does not support importing or destroying/u)
   assert.match(readme, /state mv 'cloudflare_r2_bucket\.origin' 'module\.artifact_pages\.cloudflare_r2_bucket\.origin'/u)

@@ -310,3 +310,58 @@ run "direct_delivery_rejects_overlength_wrapped_expression" {
 
   expect_failures = [cloudflare_ruleset.waf_custom_rules[0]]
 }
+
+run "unchanged_delivery_rule_is_host_scoped_and_disables_body_rewriting" {
+  command = plan
+
+  assert {
+    condition     = cloudflare_ruleset.unchanged_delivery.phase == "http_config_settings" && cloudflare_ruleset.unchanged_delivery.kind == "zone" && length(cloudflare_ruleset.unchanged_delivery.rules) == 1
+    error_message = "The module must own an http_config_settings zone root with exactly the generated rule by default."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.unchanged_delivery.rules[0].expression == "(lower(http.host) eq \"artifacts.example.test\")" && cloudflare_ruleset.unchanged_delivery.rules[0].action == "set_config" && cloudflare_ruleset.unchanged_delivery.rules[0].enabled
+    error_message = "The rule must be scoped to the lowercase public hostname, not the zone."
+  }
+
+  assert {
+    condition = (
+      cloudflare_ruleset.unchanged_delivery.rules[0].action_parameters.email_obfuscation == false &&
+      cloudflare_ruleset.unchanged_delivery.rules[0].action_parameters.rocket_loader == false &&
+      cloudflare_ruleset.unchanged_delivery.rules[0].action_parameters.automatic_https_rewrites == false &&
+      cloudflare_ruleset.unchanged_delivery.rules[0].action_parameters.fonts == false &&
+      cloudflare_ruleset.unchanged_delivery.rules[0].action_parameters.disable_rum == true &&
+      cloudflare_ruleset.unchanged_delivery.rules[0].action_parameters.disable_zaraz == true &&
+      cloudflare_ruleset.unchanged_delivery.rules[0].action_parameters.content_converter == false &&
+      cloudflare_ruleset.unchanged_delivery.rules[0].action_parameters.polish == "off"
+    )
+    error_message = "Every body-rewriting edge feature must be forced to its non-modifying value."
+  }
+}
+
+run "existing_config_rules_are_preserved_before_the_generated_rule" {
+  command = plan
+
+  variables {
+    existing_config_rules = [
+      { ref = "operator-bic", expression = "true", action = "set_config", action_parameters = { bic = true } },
+    ]
+  }
+
+  assert {
+    condition     = length(cloudflare_ruleset.unchanged_delivery.rules) == 2 && cloudflare_ruleset.unchanged_delivery.rules[0].ref == "operator-bic" && cloudflare_ruleset.unchanged_delivery.rules[1].ref == "artifact-pages-unchanged-delivery"
+    error_message = "Existing configuration rules must keep their order and the generated rule must follow them."
+  }
+}
+
+run "config_rules_reject_duplicate_refs" {
+  command = plan
+
+  variables {
+    existing_config_rules = [
+      { ref = "artifact-pages-unchanged-delivery", expression = "true", action = "set_config", action_parameters = { bic = true } },
+    ]
+  }
+
+  expect_failures = [cloudflare_ruleset.unchanged_delivery]
+}
