@@ -1,16 +1,18 @@
+> This repository is generated from [artifact-pages/artifact-pages](https://github.com/artifact-pages/artifact-pages) (`terraform/modules/cloudflare`). Open issues and pull requests there; changes here are replaced by the next module release.
+
 # Artifact Pages Cloudflare module
 
-This root module creates one private R2 bucket and connects it to the Cloudflare delivery and preview-retention configuration used by Artifact Pages. It preserves the static application/content planes and logical SPA routes, rewrites unmatched paths—including `/_control/*`—to `/index.html`, respects origin cache headers, and configures provider-managed `_previews/` expiration. It leaves the alternate `r2.dev` domain unmanaged; for a newly created private bucket, Cloudflare leaves that domain disabled by default. An optional `waf_custom_rules` input manages operator-owned rules for the selected hostname; its null default leaves the custom-firewall phase unmanaged. Production artifacts and raw preview objects receive the same trusted-HTML Content Security Policy: HTTPS resources are allowed, insecure HTTP resources are blocked, and the rule grants no CORS access. Published objects are delivered unchanged: a hostname-scoped Configuration Rule turns off the Cloudflare edge features that rewrite or inject into response bodies (see [Unchanged delivery](#unchanged-delivery)).
+This root module creates one private R2 bucket and connects it to the Cloudflare delivery and preview-retention configuration used by Artifact Pages. It preserves the static application/content planes and logical SPA routes, rewrites unmatched paths—including `/_control/*`—to `/index.html`, respects origin cache headers, and configures provider-managed `_previews/` expiration. It manages the bucket's alternate `r2.dev` public domain and keeps it disabled (`enabled = false`, not configurable), so enabling it in the dashboard shows up as drift instead of silently exposing the whole bucket. An optional `waf_custom_rules` input manages operator-owned rules for the selected hostname; its null default leaves the custom-firewall phase unmanaged. Production artifacts and raw preview objects receive the same trusted-HTML Content Security Policy: HTTPS resources are allowed, insecure HTTP resources are blocked, and the rule grants no CORS access. Published objects are delivered unchanged: a hostname-scoped Configuration Rule turns off the Cloudflare edge features that rewrite or inject into response bodies (see [Unchanged delivery](#unchanged-delivery)).
 
 The module does not deploy the SPA, publish a registry or site, create publisher credentials, configure viewer accounts, or add a request-time service. Cloudflare Access remains an operator-managed edge policy. The CLI continues to publish application and content objects through its configured credentials.
 
 ## Registry consumer
 
-The intended public Registry address is `tasuku43/artifact-pages/cloudflare`. The GitHub repository exists as a public shell, but its module source has not been pushed; the Registry does not list the module. The package is prepared for candidate version `0.1.0`, which has not been approved or published. After the owner approves a release, pushes the reviewed source and immutable tag, and publishes it to the Registry, a caller can use:
+The public Registry address is `artifact-pages/artifact-pages/cloudflare`. The source of truth is `terraform/modules/cloudflare` in the monorepo; `artifact-pages/terraform-cloudflare-artifact-pages` is generated when the monorepo tag `terraform-cloudflare/vX.Y.Z` is released. The first module version is `0.1.0`; its release tag and Terraform Registry publication are still pending. Terraform can retrieve this source after the owner publishes that exact version:
 
 ```hcl
 module "artifact_pages" {
-  source  = "tasuku43/artifact-pages/cloudflare"
+  source  = "artifact-pages/artifact-pages/cloudflare"
   version = "0.1.0"
 
   account_id             = var.cloudflare_account_id
@@ -101,7 +103,7 @@ registry_reader = {
 }
 ```
 
-The CLI uses these names only for `site publish` and `preview publish`. Other commands ignore the reader values, and a configuration without this object uses the primary credential to read the registry.
+The CLI uses these names only for `site sync` and `preview publish`, to read the registry (`/_indexes/sites.json`) and deployed web compatibility record (`/_control/versions/app.json`). Other commands ignore the reader values, and a configuration without this object uses the primary credential for both reads.
 
 ## Resource ownership and apply review
 
@@ -131,9 +133,9 @@ The Cloudflare provider needs permissions to manage R2 storage, R2 custom domain
 
 ## Existing-bucket use
 
-The root entry module always creates a bucket. If a bucket already exists and should remain managed elsewhere, use the self-contained [`delivery` submodule](modules/delivery/README.md) and [`retention` submodule](modules/retention/README.md) separately against that bucket. The modules are included in this repository, so they do not depend on a sibling checkout of the OSS project. Before exposing an existing bucket, verify that its alternate `r2.dev` domain is disabled in Cloudflare; these modules leave that setting unmanaged, and an enabled `r2.dev` URL bypasses the custom-host rewrite rules and could expose private `/_control/*` objects.
+The root entry module always creates a bucket. If a bucket already exists and should remain managed elsewhere, use the self-contained [`delivery` submodule](modules/delivery/README.md) and [`retention` submodule](modules/retention/README.md) separately against that bucket. The modules are included in this repository, so they do not depend on a sibling checkout of the OSS project. The `delivery` submodule manages the bucket's `r2.dev` domain and keeps it disabled, so after the first apply verify that its alternate `r2.dev` domain is disabled (it is a create-only setting, see below). An enabled `r2.dev` URL bypasses the custom-host rewrite rules and could expose private `/_control/*` objects. If the setting already exists outside Terraform, it can only be created, not imported: the first apply sets `enabled = false`, which is harmless when `r2.dev` is already disabled.
 
-The OSS repository's former `infra/cloudflare/delivery` and `infra/cloudflare/retention` implementations are being moved to these modules as their source of truth. For existing lower-level callers, keep the same Terraform module labels and inputs and change only the module `source` to the matching Git subdirectory pinned to a full commit SHA. The resource addresses therefore remain under the same module labels; review a fresh plan and expect no address-only replacement.
+The former OSS `infra/cloudflare/delivery` and `infra/cloudflare/retention` implementations have been consolidated into these modules. This monorepo tree is the editable source; the Registry package repository is generated from it on a module release. For existing lower-level callers, keep the same Terraform module labels and inputs and change only the module `source` to the matching Git subdirectory pinned to a full commit SHA. The resource addresses therefore remain under the same module labels; review a fresh plan and expect no address-only replacement.
 
 To migrate those two modules to the new root entry module, add the new `artifact_pages` module block, keep the existing rule inputs complete, and review all state moves before changing infrastructure. First back up the state, then move each old module instance into the new nested module path:
 
@@ -163,12 +165,26 @@ Do not run the new-bucket plan until the import and both module moves are reflec
 
 ## Local validation
 
-For the full developer integration suite, use Terraform 1.9.8, Node.js, Go, Python 3 (standard library only for the local API fixture), and a separately selected Artifact Pages OSS checkout:
+For the full developer integration suite, use Terraform 1.9.8, Node.js, Go, Python 3 (standard library only for the local API fixture), and an Artifact Pages checkout. From the monorepo root, the module validation script detects the checkout automatically:
 
 ```sh
 ARTIFACT_PAGES_APPREPO_DIR=/absolute/oss/checkout ./scripts/validate.sh
 ```
 
-For standalone package and exact-commit consumer checks without an OSS checkout, run `python3 scripts/check-package.py --commit FULL_SHA` under Terraform 1.9.8. See [release preparation and publication](RELEASE.md) for provenance, minimum-provider checks, owner approvals, and subsequent upgrades.
+To validate the generated Registry package as CI does, build it from the reviewed monorepo commit and run its copied validation script with the monorepo checkout selected for the CLI contract tests:
+
+```sh
+source_sha="$(git rev-parse HEAD)"
+node scripts/build-terraform-package-repos.mjs \
+  --module cloudflare \
+  --version 0.1.0 \
+  --source-tag terraform-cloudflare/v0.1.0 \
+  --source-commit "$source_sha" \
+  --out /tmp/terraform-package-candidate
+ARTIFACT_PAGES_APPREPO_DIR="$PWD" \
+  bash /tmp/terraform-package-candidate/terraform-cloudflare-artifact-pages/scripts/validate.sh
+```
+
+This validates a local generated candidate without publishing it. See [release preparation and publication](RELEASE.md) for tag provenance, owner approval and subsequent upgrades.
 
 The validation runs formatting, backend-free initialization, validation, root and delivery-submodule provider-mock WAF plans, retention-composition plans, negative-input checks, a real-provider lifecycle round-trip against a loopback-only API fixture (apply followed by two no-change refreshed plans and a retention-change plan), Node source/contract tests, an isolated stateful `terraform_data` check for `prevent_destroy`, and a separate state-move fixture for the documented module-address migration. It does not authenticate to or modify a Cloudflare account. Real zone-rule expression parsing, plan entitlement, quota availability, live enforcement, public routing/cache behavior, retention timing, R2 consistency, and purge propagation remain provider/live proof.

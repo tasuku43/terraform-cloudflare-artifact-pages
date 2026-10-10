@@ -48,8 +48,8 @@ test('one entry module creates and shares one bucket and one validated retention
   assert.match(outputs, /bucket\s*=\s*cloudflare_r2_bucket\.origin\.name/u)
 })
 
-test('delivery preserves logical routes, cache policy, and opt-in WAF ownership without managing r2.dev', () => {
-  assert.doesNotMatch(delivery, /cloudflare_r2_managed_domain/u)
+test('delivery preserves logical routes, cache policy, and opt-in WAF ownership and keeps r2.dev disabled', () => {
+  assert.match(delivery, /resource\s+"cloudflare_r2_managed_domain"\s+"development"\s*\{[^}]*?enabled\s*=\s*false\s*\}/u)
   assert.match(delivery, /action\s*=\s*"rewrite"[\s\S]*?value\s*=\s*"\/index\.html"/u)
   assert.match(main, /waf_custom_rules\s*=\s*var\.waf_custom_rules/u)
   assert.match(variables, /variable\s+"waf_custom_rules"[\s\S]*?default\s*=\s*null/u)
@@ -141,10 +141,10 @@ test('local and Registry examples have separate, explicit source contracts', asy
   const registryReadme = await read('examples/registry-consumer/README.md')
   assert.match(local, /source\s*=\s*"\.\.\/\.\."/u)
   assert.match(localVariables, /variable "r2_bucket_name"[\s\S]*?default\s*=\s*null/u)
-  assert.match(registry, /source\s*=\s*"tasuku43\/artifact-pages\/cloudflare"/u)
+  assert.match(registry, /source\s*=\s*"artifact-pages\/artifact-pages\/cloudflare"/u)
   assert.match(registry, /version\s*=\s*"0\.1\.0"/u)
   assert.match(registryVariables, /variable "r2_bucket_name"[\s\S]*?default\s*=\s*null/u)
-  assert.match(registryReadme, /has not approved or published/u)
+  assert.match(registryReadme, /publication is a separate owner-controlled step/u)
 })
 
 test('local Cloudflare example uses reserved values and does not claim live verification', async () => {

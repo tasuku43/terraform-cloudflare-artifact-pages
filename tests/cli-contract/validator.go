@@ -1,13 +1,20 @@
+//go:build ignore
+
+// Excluded from the monorepo build: scripts/validate.sh copies this helper (without the
+// build constraint) into the CLI tree so that it may import the CLI-internal config package.
+
 package main
 
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
+	"strings"
 
-	"github.com/tasuku43/git-artifact-pages/cli/internal/config"
-	"go.yaml.in/yaml/v4"
+	"github.com/artifact-pages/artifact-pages/cli/internal/config"
+	"go.yaml.in/yaml/v3"
 )
 
 type request struct {
@@ -117,15 +124,20 @@ func main() {
 }
 
 func yamlRoot(contents string) *yaml.Node {
-	var documents []yaml.Node
-	if err := yaml.Load([]byte(contents), &documents, yaml.WithAllDocuments()); err != nil || len(documents) != 1 {
+	decoder := yaml.NewDecoder(strings.NewReader(contents))
+	var root yaml.Node
+	if err := decoder.Decode(&root); err != nil {
 		fail("decode raw Terraform YAML for contract assertions: %v", err)
 	}
-	root := &documents[0]
-	if root.Kind == yaml.DocumentNode && len(root.Content) == 1 {
-		root = root.Content[0]
+	var extra yaml.Node
+	if err := decoder.Decode(&extra); err != io.EOF {
+		fail("raw Terraform YAML must contain exactly one document")
 	}
-	return root
+	node := &root
+	if node.Kind == yaml.DocumentNode && len(node.Content) == 1 {
+		node = node.Content[0]
+	}
+	return node
 }
 
 func mappingValue(mapping *yaml.Node, name string) *yaml.Node {
